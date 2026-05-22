@@ -1,48 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+// TODO: Replace with real GHL credentials when Tyler provides them
+// const GHL_TOKEN = "pit-XXXXXXXX";
+// const CALENDAR_ID = "XXXXXXXX";
 
-const GHL_TOKEN = "pit-ca2ec7ff-6967-4e89-8615-fb0b6ad14a0f";
-const CALENDAR_ID = "7GR1imvjNI2hduZWdYe2";
-
+// Stub: returns mock available slots for the next 7 days
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const days = parseInt(searchParams.get("days") || "7", 10);
   const tz = searchParams.get("tz") || "America/New_York";
 
+  const slots: Record<string, { slots: string[] }> = {};
+
   const now = new Date();
-  const start = new Date(now);
-  start.setDate(start.getDate() + 1);
-  start.setHours(0, 0, 0, 0);
+  for (let d = 1; d <= 7; d++) {
+    const day = new Date(now);
+    day.setDate(day.getDate() + d);
 
-  const end = new Date(start);
-  end.setDate(end.getDate() + days);
+    // Skip weekends
+    const dow = day.getDay();
+    if (dow === 0 || dow === 6) continue;
 
-  const startMs = start.getTime();
-  const endMs = end.getTime();
+    const dateKey = day.toISOString().split("T")[0];
+    const daySlots: string[] = [];
 
-  try {
-    const res = await fetch(
-      `https://services.leadconnectorhq.com/calendars/${CALENDAR_ID}/free-slots?startDate=${startMs}&endDate=${endMs}&timezone=${encodeURIComponent(tz)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_TOKEN}`,
-          Version: "2021-04-15",
-        },
-        cache: "no-store",
-      }
-    );
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error("GHL free-slots error:", err);
-      return NextResponse.json({ error: "Failed to fetch slots" }, { status: 500 });
+    // Generate 9 AM, 10 AM, 11 AM, 1 PM, 2 PM, 3 PM slots in ET
+    for (const hour of [9, 10, 11, 13, 14, 15]) {
+      const slot = new Date(`${dateKey}T${String(hour).padStart(2, "0")}:00:00-04:00`);
+      daySlots.push(slot.toISOString());
     }
 
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (err) {
-    console.error("Slots fetch error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    slots[dateKey] = { slots: daySlots };
   }
+
+  return NextResponse.json(slots);
 }
